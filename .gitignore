@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Data and artifacts
+Data/
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.npy
+*.arrow
+*.json
+*.png
+*.jpg
+*.pdf
+logs/
+runs/
+wandb/
+
+# Misc
+*.log
