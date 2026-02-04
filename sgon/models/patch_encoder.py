@@ -32,6 +32,11 @@ class PatchEncoder1D(nn.Module):
         extra_sensor_dim: int = 0,
         use_attention_pool: bool = False,
         use_global_residual: bool = False,
+        use_u_backbone: bool = False,
+        use_u_backbone_pos: bool = False,
+        u_backbone_channels: int = 16,
+        u_backbone_layers: int = 4,
+        u_backbone_kernel: int = 5,
     ):
         super().__init__()
         self.register_buffer("centers", patch_centers.detach().clone())
@@ -41,6 +46,13 @@ class PatchEncoder1D(nn.Module):
         self.extra_sensor_dim = extra_sensor_dim
         self.use_attention_pool = use_attention_pool
         self.use_global_residual = use_global_residual
+        self.use_u_backbone = use_u_backbone
+        self.use_u_backbone_pos = use_u_backbone_pos
+
+        if self.use_global or self.use_u_backbone_pos:
+            s = sensor_x
+            s_norm = 2.0 * (s - s.min()) / (s.max() - s.min() + 1e-12) - 1.0
+            self.register_buffer("sensor_x_norm", s_norm.view(-1, 1))
 
         # Precompute K nearest sensors per patch (on init)
         dist = (sensor_x[None, :] - self.centers[:, None]).abs()
@@ -53,16 +65,42 @@ class PatchEncoder1D(nn.Module):
         rel = (sensor_x[knn] - self.centers[:, None]) / (self.radius + 1e-12)
         self.register_buffer("rel_x", rel.unsqueeze(-1))
 
-        # Pointwise sensor MLP: input [dx, u, extra...] -> hidden
-        sensor_feat_dim = 2 + self.extra_sensor_dim
+        # Optional 1D conv backbone over ordered sensors to provide global context.
+        # This assumes sensor ordering is consistent across batches (fixed sensors).
+        conv_feat_dim = 0
+        if self.use_u_backbone:
+            if u_backbone_kernel % 2 == 0:
+                raise ValueError("u_backbone_kernel must be odd for 'same' padding.")
+            cin = 1 + self.extra_sensor_dim + (1 if self.use_u_backbone_pos else 0)
+            ch = int(u_backbone_channels)
+            layers = []
+            dilation = 1
+            for i in range(int(u_backbone_layers)):
+                in_ch = cin if i == 0 else ch
+                pad = dilation * (u_backbone_kernel - 1) // 2
+                layers.append(
+                    nn.Conv1d(
+                        in_ch,
+                        ch,
+                        kernel_size=u_backbone_kernel,
+                        padding=pad,
+                        dilation=dilation,
+                    )
+                )
+                layers.append(nn.SiLU())
+                dilation *= 2
+            self.u_backbone = nn.Sequential(*layers)
+            conv_feat_dim = ch
+        else:
+            self.u_backbone = None
+
+        # Pointwise sensor MLP: input [dx, u, u_backbone..., extra...] -> hidden
+        sensor_feat_dim = 2 + conv_feat_dim + self.extra_sensor_dim
         self.mlp_point = mlp([sensor_feat_dim, hidden, hidden])
         if self.use_attention_pool:
             self.mlp_attn = mlp([sensor_feat_dim, hidden, 1])
         if self.use_global:
             # Global sensor MLP: input [x, u] -> hidden
-            s = sensor_x
-            s_norm = 2.0 * (s - s.min()) / (s.max() - s.min() + 1e-12) - 1.0
-            self.register_buffer("sensor_x_norm", s_norm.view(-1, 1))
             global_feat_dim = 2 + self.extra_sensor_dim
             self.mlp_global = mlp([global_feat_dim, hidden, hidden])
 
@@ -102,14 +140,34 @@ class PatchEncoder1D(nn.Module):
         u_patch = u[:, self.sensor_ids]
         if self.extra_sensor_dim > 0:
             extra_patch = extra_sensor_feat[:, self.sensor_ids, :]  # [B,M,K,F]
+        if self.u_backbone is not None:
+            x_ch = None
+            if self.use_u_backbone_pos:
+                x_ch = self.sensor_x_norm.unsqueeze(0).expand(B, -1, -1)  # [B,Ns,1]
+            if self.extra_sensor_dim > 0:
+                conv_in = torch.cat([us, extra_sensor_feat], dim=-1)  # [B,Ns,1+F]
+            else:
+                conv_in = us  # [B,Ns,1]
+            if x_ch is not None:
+                conv_in = torch.cat([x_ch, conv_in], dim=-1)  # [B,Ns,1+Cin]
+            conv_in = conv_in.permute(0, 2, 1).contiguous()  # [B,Cin,Ns]
+            conv_out = self.u_backbone(conv_in)  # [B,C,Ns]
+            conv_out = conv_out.permute(0, 2, 1).contiguous()  # [B,Ns,C]
+            conv_patch = conv_out[:, self.sensor_ids, :]  # [B,M,K,C]
 
         # Build per-sensor features: concat(rel_x, u)
         rel_x = self.rel_x.unsqueeze(0).expand(B, -1, -1, -1)
         u_feat = u_patch.unsqueeze(-1)
         if self.extra_sensor_dim > 0:
-            feat = torch.cat([rel_x, u_feat, extra_patch], dim=-1)
+            if self.u_backbone is not None:
+                feat = torch.cat([rel_x, u_feat, conv_patch, extra_patch], dim=-1)
+            else:
+                feat = torch.cat([rel_x, u_feat, extra_patch], dim=-1)
         else:
-            feat = torch.cat([rel_x, u_feat], dim=-1)
+            if self.u_backbone is not None:
+                feat = torch.cat([rel_x, u_feat, conv_patch], dim=-1)
+            else:
+                feat = torch.cat([rel_x, u_feat], dim=-1)
 
         h = self.mlp_point(feat)  # [B,M,K,H]
         if self.use_attention_pool:

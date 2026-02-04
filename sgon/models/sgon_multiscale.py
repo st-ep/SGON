@@ -31,6 +31,11 @@ class SGON1DCoarseFine(nn.Module):
         deriv_weight: float = 1.0,
         use_attention_pool: bool = False,
         use_global_residual: bool = False,
+        use_u_backbone: bool = False,
+        use_u_backbone_pos: bool = False,
+        u_backbone_channels: int = 16,
+        u_backbone_layers: int = 4,
+        u_backbone_kernel: int = 5,
         glue_mode: str = "cg",
         poly_k: int = 3,
         poly_basis: str = "monomial",
@@ -67,6 +72,11 @@ class SGON1DCoarseFine(nn.Module):
             extra_sensor_dim=0,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
         if glue_mode == "poly":
             self.coarse_gluing = SheafGluingPoly(
@@ -117,6 +127,11 @@ class SGON1DCoarseFine(nn.Module):
             extra_sensor_dim=1,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
         if glue_mode == "poly":
             self.fine_gluing = SheafGluingPoly(
@@ -200,6 +215,11 @@ class SGON1DThreeScale(nn.Module):
         deriv_weight: float = 1.0,
         use_attention_pool: bool = False,
         use_global_residual: bool = False,
+        use_u_backbone: bool = False,
+        use_u_backbone_pos: bool = False,
+        u_backbone_channels: int = 16,
+        u_backbone_layers: int = 4,
+        u_backbone_kernel: int = 5,
         glue_mode: str = "cg",
         poly_k: int = 3,
         poly_basis: str = "monomial",
@@ -242,6 +262,11 @@ class SGON1DThreeScale(nn.Module):
             extra_sensor_dim=0,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
         if glue_mode == "poly":
             self.coarse_gluing = SheafGluingPoly(
@@ -292,6 +317,11 @@ class SGON1DThreeScale(nn.Module):
             extra_sensor_dim=1,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
         if glue_mode == "poly":
             self.mid_gluing = SheafGluingPoly(
@@ -342,6 +372,11 @@ class SGON1DThreeScale(nn.Module):
             extra_sensor_dim=2,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
         if glue_mode == "poly":
             self.fine_gluing = SheafGluingPoly(

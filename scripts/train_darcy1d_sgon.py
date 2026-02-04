@@ -21,7 +21,7 @@ def main():
     p.add_argument(
         "--data_path",
         type=str,
-        default="Data/darcy_1d_data/darcy_1d_dataset_501_sigma_0.008",
+        default="Data/darcy_1d_data/darcy_1d_dataset_501",
     )
     p.add_argument(
         "--device",
@@ -63,12 +63,17 @@ def main():
     p.add_argument("--deriv_weight", type=float, default=1.0)
     p.add_argument("--attention_pool", action="store_true", help="Use attention-weighted sensor pooling")
     p.add_argument("--global_residual", action="store_true", help="Add global latent residual to patch coeffs")
+    p.add_argument("--u_backbone", action="store_true", help="Use small 1D conv backbone over sensor u")
+    p.add_argument("--u_backbone_pos", action="store_true", help="Add sensor x as a channel to u_backbone Conv1d")
+    p.add_argument("--u_backbone_channels", type=int, default=16)
+    p.add_argument("--u_backbone_layers", type=int, default=4)
+    p.add_argument("--u_backbone_kernel", type=int, default=5)
     p.add_argument("--glue_mode", type=str, default="cg", choices=["cg", "poly"])
     p.add_argument("--poly_k", type=int, default=3)
     p.add_argument("--poly_basis", type=str, default="monomial", choices=["monomial", "chebyshev"])
     p.add_argument("--poly_norm", type=str, default="none", choices=["none", "degree", "power"])
-    p.add_argument("--poly_power_iters", type=int, default=20)
-    p.add_argument("--gluing_lam", type=float, default=1.0)
+    p.add_argument("--poly_power_iters", type=int, default=10)
+    p.add_argument("--gluing_lam", type=float, default=0.0)
     p.add_argument("--cg_iters", type=int, default=20)
 
     # optim
@@ -193,6 +198,11 @@ def main():
                 deriv_weight=args.deriv_weight,
                 use_attention_pool=args.attention_pool,
                 use_global_residual=args.global_residual,
+                use_u_backbone=args.u_backbone,
+                use_u_backbone_pos=args.u_backbone_pos,
+                u_backbone_channels=args.u_backbone_channels,
+                u_backbone_layers=args.u_backbone_layers,
+                u_backbone_kernel=args.u_backbone_kernel,
                 glue_mode=args.glue_mode,
                 poly_k=args.poly_k,
                 poly_basis=args.poly_basis,
@@ -216,6 +226,11 @@ def main():
                 deriv_weight=args.deriv_weight,
                 use_attention_pool=args.attention_pool,
                 use_global_residual=args.global_residual,
+                use_u_backbone=args.u_backbone,
+                use_u_backbone_pos=args.u_backbone_pos,
+                u_backbone_channels=args.u_backbone_channels,
+                u_backbone_layers=args.u_backbone_layers,
+                u_backbone_kernel=args.u_backbone_kernel,
                 glue_mode=args.glue_mode,
                 poly_k=args.poly_k,
                 poly_basis=args.poly_basis,
@@ -237,6 +252,11 @@ def main():
             deriv_weight=args.deriv_weight,
             use_attention_pool=args.attention_pool,
             use_global_residual=args.global_residual,
+            use_u_backbone=args.u_backbone,
+            use_u_backbone_pos=args.u_backbone_pos,
+            u_backbone_channels=args.u_backbone_channels,
+            u_backbone_layers=args.u_backbone_layers,
+            u_backbone_kernel=args.u_backbone_kernel,
             glue_mode=args.glue_mode,
             poly_k=args.poly_k,
             poly_basis=args.poly_basis,

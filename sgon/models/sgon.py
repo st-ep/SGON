@@ -22,6 +22,11 @@ class SGON1D(nn.Module):
         deriv_weight: float = 1.0,
         use_attention_pool: bool = False,
         use_global_residual: bool = False,
+        use_u_backbone: bool = False,
+        use_u_backbone_pos: bool = False,
+        u_backbone_channels: int = 16,
+        u_backbone_layers: int = 4,
+        u_backbone_kernel: int = 5,
         glue_mode: str = "cg",
         poly_k: int = 3,
         poly_basis: str = "monomial",
@@ -48,6 +53,11 @@ class SGON1D(nn.Module):
             use_global=use_global,
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
         )
 
         if glue_mode == "poly":

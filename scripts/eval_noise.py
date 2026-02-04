@@ -89,6 +89,11 @@ def build_sgon_from_ckpt(ckpt: dict, data: Darcy1DPreload, device: torch.device)
     use_global = not get("no_global", False)
     use_attention_pool = get("attention_pool", False)
     use_global_residual = get("global_residual", False)
+    use_u_backbone = get("u_backbone", False)
+    use_u_backbone_pos = get("u_backbone_pos", False)
+    u_backbone_channels = get("u_backbone_channels", 16)
+    u_backbone_layers = get("u_backbone_layers", 4)
+    u_backbone_kernel = get("u_backbone_kernel", 5)
     glue_mode = get("glue_mode", "cg")
     poly_k = get("poly_k", 3)
     poly_basis = get("poly_basis", "monomial")
@@ -114,6 +119,11 @@ def build_sgon_from_ckpt(ckpt: dict, data: Darcy1DPreload, device: torch.device)
                 deriv_weight=get("deriv_weight", 1.0),
                 use_attention_pool=use_attention_pool,
                 use_global_residual=use_global_residual,
+                use_u_backbone=use_u_backbone,
+                use_u_backbone_pos=use_u_backbone_pos,
+                u_backbone_channels=u_backbone_channels,
+                u_backbone_layers=u_backbone_layers,
+                u_backbone_kernel=u_backbone_kernel,
                 glue_mode=glue_mode,
                 poly_k=poly_k,
                 poly_basis=poly_basis,
@@ -137,6 +147,11 @@ def build_sgon_from_ckpt(ckpt: dict, data: Darcy1DPreload, device: torch.device)
                 deriv_weight=get("deriv_weight", 1.0),
                 use_attention_pool=use_attention_pool,
                 use_global_residual=use_global_residual,
+                use_u_backbone=use_u_backbone,
+                use_u_backbone_pos=use_u_backbone_pos,
+                u_backbone_channels=u_backbone_channels,
+                u_backbone_layers=u_backbone_layers,
+                u_backbone_kernel=u_backbone_kernel,
                 glue_mode=glue_mode,
                 poly_k=poly_k,
                 poly_basis=poly_basis,
@@ -158,6 +173,11 @@ def build_sgon_from_ckpt(ckpt: dict, data: Darcy1DPreload, device: torch.device)
             deriv_weight=get("deriv_weight", 1.0),
             use_attention_pool=use_attention_pool,
             use_global_residual=use_global_residual,
+            use_u_backbone=use_u_backbone,
+            use_u_backbone_pos=use_u_backbone_pos,
+            u_backbone_channels=u_backbone_channels,
+            u_backbone_layers=u_backbone_layers,
+            u_backbone_kernel=u_backbone_kernel,
             glue_mode=glue_mode,
             poly_k=poly_k,
             poly_basis=poly_basis,
