@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def batch_dot(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -53,6 +54,13 @@ class SheafGluingCG(nn.Module):
         dst: torch.Tensor,  # [E]
         R_src: torch.Tensor,  # [E,A,d]
         R_dst: torch.Tensor,  # [E,A,d]
+        R_src_d1: torch.Tensor | None = None,  # [E,A,d]
+        R_dst_d1: torch.Tensor | None = None,  # [E,A,d]
+        edge_feat: torch.Tensor | None = None,  # [E,F]
+        use_edge_weights: bool = False,
+        edge_hidden: int = 32,
+        use_deriv: bool = False,
+        deriv_weight: float = 1.0,
         lam: float = 1.0,
         n_iters: int = 20,
         tol: float = 1e-6,
@@ -62,6 +70,32 @@ class SheafGluingCG(nn.Module):
         self.register_buffer("dst", dst)
         self.register_buffer("R_src", R_src)
         self.register_buffer("R_dst", R_dst)
+        if R_src_d1 is not None:
+            self.register_buffer("R_src_d1", R_src_d1)
+        else:
+            self.R_src_d1 = None
+        if R_dst_d1 is not None:
+            self.register_buffer("R_dst_d1", R_dst_d1)
+        else:
+            self.R_dst_d1 = None
+        self.use_edge_weights = use_edge_weights
+        self.use_deriv = use_deriv
+        self.deriv_weight = deriv_weight
+        if edge_feat is not None:
+            self.register_buffer("edge_feat", edge_feat)
+        else:
+            self.edge_feat = None
+        if self.use_edge_weights:
+            if self.edge_feat is None:
+                raise ValueError("edge_feat must be provided when use_edge_weights=True")
+            feat_dim = self.edge_feat.shape[-1]
+            self.edge_mlp = nn.Sequential(
+                nn.Linear(feat_dim, edge_hidden),
+                nn.SiLU(),
+                nn.Linear(edge_hidden, 1),
+            )
+        else:
+            self.edge_mlp = None
         self.lam = lam
         self.n_iters = n_iters
         self.tol = tol
@@ -83,6 +117,10 @@ class SheafGluingCG(nn.Module):
         tmp_src = torch.einsum("ead,bed->bea", self.R_src, p_src)
         tmp_dst = torch.einsum("ead,bed->bea", self.R_dst, p_dst)
         r = tmp_src - tmp_dst
+        w = None
+        if self.use_edge_weights and self.edge_mlp is not None and self.edge_feat.numel() > 0:
+            w = F.softplus(self.edge_mlp(self.edge_feat)) + 1e-6  # [E,1]
+            r = r * w.view(1, -1, 1).to(r.dtype)
 
         # contrib to src: Rsrc^T r -> [B,E,d]
         c_src = torch.einsum("ead,bea->bed", self.R_src, r)
@@ -92,6 +130,20 @@ class SheafGluingCG(nn.Module):
         acc = torch.zeros_like(p)
         acc.index_add_(1, self.src, c_src.to(acc.dtype))
         acc.index_add_(1, self.dst, c_dst.to(acc.dtype))
+
+        if self.use_deriv:
+            if self.R_src_d1 is None or self.R_dst_d1 is None:
+                raise ValueError("R_src_d1/R_dst_d1 must be provided when use_deriv=True")
+            tmp_src_d1 = torch.einsum("ead,bed->bea", self.R_src_d1, p_src)
+            tmp_dst_d1 = torch.einsum("ead,bed->bea", self.R_dst_d1, p_dst)
+            r_d1 = tmp_src_d1 - tmp_dst_d1
+            if w is not None:
+                r_d1 = r_d1 * w.view(1, -1, 1).to(r_d1.dtype)
+
+            c_src_d1 = torch.einsum("ead,bea->bed", self.R_src_d1, r_d1)
+            c_dst_d1 = -torch.einsum("ead,bea->bed", self.R_dst_d1, r_d1)
+            acc.index_add_(1, self.src, (self.deriv_weight * c_src_d1).to(acc.dtype))
+            acc.index_add_(1, self.dst, (self.deriv_weight * c_dst_d1).to(acc.dtype))
 
         return p + self.lam * acc
 

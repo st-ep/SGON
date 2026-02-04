@@ -29,12 +29,14 @@ class PatchEncoder1D(nn.Module):
         k_sensors_per_patch: int = 16,
         hidden: int = 64,
         use_global: bool = True,
+        extra_sensor_dim: int = 0,
     ):
         super().__init__()
         self.register_buffer("centers", patch_centers.detach().clone())
         self.register_buffer("radius", patch_radius.detach().clone())
         self.M = self.centers.numel()
         self.use_global = use_global
+        self.extra_sensor_dim = extra_sensor_dim
 
         # Precompute K nearest sensors per patch (on init)
         dist = (sensor_x[None, :] - self.centers[:, None]).abs()
@@ -47,20 +49,27 @@ class PatchEncoder1D(nn.Module):
         rel = (sensor_x[knn] - self.centers[:, None]) / (self.radius + 1e-12)
         self.register_buffer("rel_x", rel.unsqueeze(-1))
 
-        # Pointwise sensor MLP: input [dx, u] -> hidden
-        self.mlp_point = mlp([2, hidden, hidden])
+        # Pointwise sensor MLP: input [dx, u, extra...] -> hidden
+        sensor_feat_dim = 2 + self.extra_sensor_dim
+        self.mlp_point = mlp([sensor_feat_dim, hidden, hidden])
         if self.use_global:
             # Global sensor MLP: input [x, u] -> hidden
             s = sensor_x
             s_norm = 2.0 * (s - s.min()) / (s.max() - s.min() + 1e-12) - 1.0
             self.register_buffer("sensor_x_norm", s_norm.view(-1, 1))
-            self.mlp_global = mlp([2, hidden, hidden])
+            global_feat_dim = 2 + self.extra_sensor_dim
+            self.mlp_global = mlp([global_feat_dim, hidden, hidden])
 
         # Patch MLP: [pooled_hidden, center] -> coeffs
         in_dim = hidden + 1 + (hidden if self.use_global else 0)
         self.mlp_patch = mlp([in_dim, hidden, basis_dim])
 
-    def forward(self, xs: torch.Tensor, us: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        xs: torch.Tensor,
+        us: torch.Tensor,
+        extra_sensor_feat: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """
         xs: [B,Ns,1]  (not used except for sanity; we assume fixed sensors)
         us: [B,Ns,1]
@@ -68,14 +77,30 @@ class PatchEncoder1D(nn.Module):
         """
         B, Ns, _ = us.shape
         u = us[..., 0]  # [B,Ns]
+        if self.extra_sensor_dim > 0:
+            if extra_sensor_feat is None:
+                extra_sensor_feat = torch.zeros(
+                    B,
+                    Ns,
+                    self.extra_sensor_dim,
+                    device=us.device,
+                    dtype=us.dtype,
+                )
+            elif extra_sensor_feat.shape[-1] != self.extra_sensor_dim:
+                raise ValueError("extra_sensor_feat has wrong feature dimension")
 
         # Gather u at K sensors per patch -> [B,M,K]
         u_patch = u[:, self.sensor_ids]
+        if self.extra_sensor_dim > 0:
+            extra_patch = extra_sensor_feat[:, self.sensor_ids, :]  # [B,M,K,F]
 
         # Build per-sensor features: concat(rel_x, u)
         rel_x = self.rel_x.unsqueeze(0).expand(B, -1, -1, -1)
         u_feat = u_patch.unsqueeze(-1)
-        feat = torch.cat([rel_x, u_feat], dim=-1)
+        if self.extra_sensor_dim > 0:
+            feat = torch.cat([rel_x, u_feat, extra_patch], dim=-1)
+        else:
+            feat = torch.cat([rel_x, u_feat], dim=-1)
 
         h = self.mlp_point(feat)  # [B,M,K,H]
         pooled = h.mean(dim=2)  # [B,M,H]
@@ -87,7 +112,10 @@ class PatchEncoder1D(nn.Module):
 
         if self.use_global:
             s_norm = self.sensor_x_norm.unsqueeze(0).expand(B, -1, -1)  # [B,Ns,1]
-            g_in = torch.cat([s_norm, us], dim=-1)  # [B,Ns,2]
+            if self.extra_sensor_dim > 0:
+                g_in = torch.cat([s_norm, us, extra_sensor_feat], dim=-1)
+            else:
+                g_in = torch.cat([s_norm, us], dim=-1)
             g = self.mlp_global(g_in).mean(dim=1)  # [B,H]
             g = g.unsqueeze(1).expand(B, self.M, -1)  # [B,M,H]
             z = torch.cat([pooled, c_norm, g], dim=-1)
