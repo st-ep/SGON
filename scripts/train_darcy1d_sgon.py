@@ -21,7 +21,7 @@ def main():
     p.add_argument(
         "--data_path",
         type=str,
-        default="Data/darcy_1d_data/darcy_1d_dataset_501",
+        default="Data/darcy_1d_data/darcy_1d_dataset_501_sigma_0.008",
     )
     p.add_argument(
         "--device",
@@ -54,13 +54,20 @@ def main():
     p.add_argument("--basis_type_mid", type=str, default=None, choices=["poly", "rbf"])
 
     # model + glue
-    p.add_argument("--k_sensors_per_patch", type=int, default=32)
-    p.add_argument("--enc_hidden", type=int, default=64)
+    p.add_argument("--k_sensors_per_patch", type=int, default=64)
+    p.add_argument("--enc_hidden", type=int, default=32)
     p.add_argument("--no_global", action="store_true", help="Disable global sensor pooling")
     p.add_argument("--edge_weights", action="store_true", help="Use learned edge weights")
     p.add_argument("--edge_hidden", type=int, default=32)
     p.add_argument("--deriv_glue", action="store_true", help="Use value+derivative gluing")
     p.add_argument("--deriv_weight", type=float, default=1.0)
+    p.add_argument("--attention_pool", action="store_true", help="Use attention-weighted sensor pooling")
+    p.add_argument("--global_residual", action="store_true", help="Add global latent residual to patch coeffs")
+    p.add_argument("--glue_mode", type=str, default="cg", choices=["cg", "poly"])
+    p.add_argument("--poly_k", type=int, default=3)
+    p.add_argument("--poly_basis", type=str, default="monomial", choices=["monomial", "chebyshev"])
+    p.add_argument("--poly_norm", type=str, default="none", choices=["none", "degree", "power"])
+    p.add_argument("--poly_power_iters", type=int, default=20)
     p.add_argument("--gluing_lam", type=float, default=1.0)
     p.add_argument("--cg_iters", type=int, default=20)
 
@@ -69,6 +76,7 @@ def main():
     p.add_argument("--steps", type=int, default=150000)
     p.add_argument("--eval_every", type=int, default=250)
     p.add_argument("--physics_beta", type=float, default=0.0)
+    p.add_argument("--train_noise_std", type=float, default=0.0, help="Std of Gaussian noise added to sensor u during training")
     p.add_argument(
         "--lr_schedule_steps",
         type=int,
@@ -183,6 +191,13 @@ def main():
                 edge_hidden=args.edge_hidden,
                 use_deriv_glue=args.deriv_glue,
                 deriv_weight=args.deriv_weight,
+                use_attention_pool=args.attention_pool,
+                use_global_residual=args.global_residual,
+                glue_mode=args.glue_mode,
+                poly_k=args.poly_k,
+                poly_basis=args.poly_basis,
+                poly_norm=args.poly_norm,
+                poly_power_iters=args.poly_power_iters,
                 gluing_lam=args.gluing_lam,
                 cg_iters=args.cg_iters,
             ).to(device)
@@ -199,6 +214,13 @@ def main():
                 edge_hidden=args.edge_hidden,
                 use_deriv_glue=args.deriv_glue,
                 deriv_weight=args.deriv_weight,
+                use_attention_pool=args.attention_pool,
+                use_global_residual=args.global_residual,
+                glue_mode=args.glue_mode,
+                poly_k=args.poly_k,
+                poly_basis=args.poly_basis,
+                poly_norm=args.poly_norm,
+                poly_power_iters=args.poly_power_iters,
                 gluing_lam=args.gluing_lam,
                 cg_iters=args.cg_iters,
             ).to(device)
@@ -213,6 +235,13 @@ def main():
             edge_hidden=args.edge_hidden,
             use_deriv_glue=args.deriv_glue,
             deriv_weight=args.deriv_weight,
+            use_attention_pool=args.attention_pool,
+            use_global_residual=args.global_residual,
+            glue_mode=args.glue_mode,
+            poly_k=args.poly_k,
+            poly_basis=args.poly_basis,
+            poly_norm=args.poly_norm,
+            poly_power_iters=args.poly_power_iters,
             gluing_lam=args.gluing_lam,
             cg_iters=args.cg_iters,
         ).to(device)
@@ -260,6 +289,9 @@ def main():
 
     for step in pbar:
         xs, us, ys, s_gt, u_q = train.sample_batch(args.batch_size)
+        if args.train_noise_std > 0.0:
+            noise = torch.randn_like(us)
+            us = us + args.train_noise_std * noise
 
         opt.zero_grad(set_to_none=True)
         with torch.amp.autocast(device_type="cuda", enabled=use_amp):

@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from ..geometry.patch_cover_1d import PatchCover1D
 from .patch_encoder import PatchEncoder1D
-from .gluing_cg import SheafGluingCG
+from .gluing_cg import SheafGluingCG, SheafGluingPoly
 
 
 class SGON1D(nn.Module):
@@ -20,6 +20,13 @@ class SGON1D(nn.Module):
         edge_hidden: int = 32,
         use_deriv_glue: bool = False,
         deriv_weight: float = 1.0,
+        use_attention_pool: bool = False,
+        use_global_residual: bool = False,
+        glue_mode: str = "cg",
+        poly_k: int = 3,
+        poly_basis: str = "monomial",
+        poly_norm: str = "none",
+        poly_power_iters: int = 10,
         gluing_lam: float = 5.0,
         cg_iters: int = 20,
         cg_tol: float = 1e-6,
@@ -39,24 +46,46 @@ class SGON1D(nn.Module):
             k_sensors_per_patch=k_sensors_per_patch,
             hidden=enc_hidden,
             use_global=use_global,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
 
-        self.gluing = SheafGluingCG(
-            src=cover.src,
-            dst=cover.dst,
-            R_src=cover.R_src,
-            R_dst=cover.R_dst,
-            R_src_d1=cover.R_src_d1,
-            R_dst_d1=cover.R_dst_d1,
-            edge_feat=cover.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.gluing = SheafGluingPoly(
+                src=cover.src,
+                dst=cover.dst,
+                R_src=cover.R_src,
+                R_dst=cover.R_dst,
+                R_src_d1=cover.R_src_d1,
+                R_dst_d1=cover.R_dst_d1,
+                edge_feat=cover.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.gluing = SheafGluingCG(
+                src=cover.src,
+                dst=cover.dst,
+                R_src=cover.R_src,
+                R_dst=cover.R_dst,
+                R_src_d1=cover.R_src_d1,
+                R_dst_d1=cover.R_dst_d1,
+                edge_feat=cover.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
     def decode(self, c: torch.Tensor) -> torch.Tensor:
         """

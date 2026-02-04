@@ -30,6 +30,8 @@ class PatchEncoder1D(nn.Module):
         hidden: int = 64,
         use_global: bool = True,
         extra_sensor_dim: int = 0,
+        use_attention_pool: bool = False,
+        use_global_residual: bool = False,
     ):
         super().__init__()
         self.register_buffer("centers", patch_centers.detach().clone())
@@ -37,6 +39,8 @@ class PatchEncoder1D(nn.Module):
         self.M = self.centers.numel()
         self.use_global = use_global
         self.extra_sensor_dim = extra_sensor_dim
+        self.use_attention_pool = use_attention_pool
+        self.use_global_residual = use_global_residual
 
         # Precompute K nearest sensors per patch (on init)
         dist = (sensor_x[None, :] - self.centers[:, None]).abs()
@@ -52,6 +56,8 @@ class PatchEncoder1D(nn.Module):
         # Pointwise sensor MLP: input [dx, u, extra...] -> hidden
         sensor_feat_dim = 2 + self.extra_sensor_dim
         self.mlp_point = mlp([sensor_feat_dim, hidden, hidden])
+        if self.use_attention_pool:
+            self.mlp_attn = mlp([sensor_feat_dim, hidden, 1])
         if self.use_global:
             # Global sensor MLP: input [x, u] -> hidden
             s = sensor_x
@@ -63,6 +69,9 @@ class PatchEncoder1D(nn.Module):
         # Patch MLP: [pooled_hidden, center] -> coeffs
         in_dim = hidden + 1 + (hidden if self.use_global else 0)
         self.mlp_patch = mlp([in_dim, hidden, basis_dim])
+        if self.use_global_residual:
+            g_in_dim = hidden + 1  # global pooled + center
+            self.mlp_global_proj = mlp([g_in_dim, hidden, basis_dim])
 
     def forward(
         self,
@@ -103,13 +112,19 @@ class PatchEncoder1D(nn.Module):
             feat = torch.cat([rel_x, u_feat], dim=-1)
 
         h = self.mlp_point(feat)  # [B,M,K,H]
-        pooled = h.mean(dim=2)  # [B,M,H]
+        if self.use_attention_pool:
+            a = self.mlp_attn(feat).squeeze(-1)  # [B,M,K]
+            a = torch.softmax(a, dim=-1).unsqueeze(-1)
+            pooled = (h * a).sum(dim=2)
+        else:
+            pooled = h.mean(dim=2)  # [B,M,H]
 
         # Add center as feature (normalized to roughly [-1,1])
         c = self.centers
         c_norm = 2.0 * (c - c.min()) / (c.max() - c.min() + 1e-12) - 1.0
         c_norm = c_norm.view(1, -1, 1).expand(B, -1, -1)
 
+        g = None
         if self.use_global:
             s_norm = self.sensor_x_norm.unsqueeze(0).expand(B, -1, -1)  # [B,Ns,1]
             if self.extra_sensor_dim > 0:
@@ -121,5 +136,9 @@ class PatchEncoder1D(nn.Module):
             z = torch.cat([pooled, c_norm, g], dim=-1)
         else:
             z = torch.cat([pooled, c_norm], dim=-1)
+
         c0 = self.mlp_patch(z)
+        if self.use_global_residual and g is not None:
+            g_proj = self.mlp_global_proj(torch.cat([g, c_norm], dim=-1))
+            c0 = c0 + g_proj
         return c0

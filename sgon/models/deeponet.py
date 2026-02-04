@@ -2,7 +2,12 @@ import torch
 import torch.nn as nn
 from tqdm import trange
 
-from .utils.helper_utils import calculate_l2_relative_error
+
+def calculate_l2_relative_error(pred: torch.Tensor, true: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
+    # pred/true: [B, Q]
+    num = torch.norm(pred - true, dim=1)
+    den = torch.norm(true, dim=1) + eps
+    return (num / den).mean()
 
 class MLP(nn.Module):
     """

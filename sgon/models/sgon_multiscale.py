@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from ..geometry.patch_cover_1d import PatchCover1D
 from .patch_encoder import PatchEncoder1D
-from .gluing_cg import SheafGluingCG
+from .gluing_cg import SheafGluingCG, SheafGluingPoly
 
 
 class SGON1DCoarseFine(nn.Module):
@@ -29,6 +29,13 @@ class SGON1DCoarseFine(nn.Module):
         edge_hidden: int = 32,
         use_deriv_glue: bool = False,
         deriv_weight: float = 1.0,
+        use_attention_pool: bool = False,
+        use_global_residual: bool = False,
+        glue_mode: str = "cg",
+        poly_k: int = 3,
+        poly_basis: str = "monomial",
+        poly_norm: str = "none",
+        poly_power_iters: int = 10,
         gluing_lam: float = 5.0,
         cg_iters: int = 20,
         cg_tol: float = 1e-6,
@@ -58,23 +65,45 @@ class SGON1DCoarseFine(nn.Module):
             hidden=enc_hidden,
             use_global=use_global,
             extra_sensor_dim=0,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
-        self.coarse_gluing = SheafGluingCG(
-            src=cover_coarse.src,
-            dst=cover_coarse.dst,
-            R_src=cover_coarse.R_src,
-            R_dst=cover_coarse.R_dst,
-            R_src_d1=cover_coarse.R_src_d1,
-            R_dst_d1=cover_coarse.R_dst_d1,
-            edge_feat=cover_coarse.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.coarse_gluing = SheafGluingPoly(
+                src=cover_coarse.src,
+                dst=cover_coarse.dst,
+                R_src=cover_coarse.R_src,
+                R_dst=cover_coarse.R_dst,
+                R_src_d1=cover_coarse.R_src_d1,
+                R_dst_d1=cover_coarse.R_dst_d1,
+                edge_feat=cover_coarse.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.coarse_gluing = SheafGluingCG(
+                src=cover_coarse.src,
+                dst=cover_coarse.dst,
+                R_src=cover_coarse.R_src,
+                R_dst=cover_coarse.R_dst,
+                R_src_d1=cover_coarse.R_src_d1,
+                R_dst_d1=cover_coarse.R_dst_d1,
+                edge_feat=cover_coarse.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
         # Fine encoder + gluing
         self.fine_encoder = PatchEncoder1D(
@@ -86,23 +115,45 @@ class SGON1DCoarseFine(nn.Module):
             hidden=enc_hidden,
             use_global=use_global,
             extra_sensor_dim=1,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
-        self.fine_gluing = SheafGluingCG(
-            src=cover_fine.src,
-            dst=cover_fine.dst,
-            R_src=cover_fine.R_src,
-            R_dst=cover_fine.R_dst,
-            R_src_d1=cover_fine.R_src_d1,
-            R_dst_d1=cover_fine.R_dst_d1,
-            edge_feat=cover_fine.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.fine_gluing = SheafGluingPoly(
+                src=cover_fine.src,
+                dst=cover_fine.dst,
+                R_src=cover_fine.R_src,
+                R_dst=cover_fine.R_dst,
+                R_src_d1=cover_fine.R_src_d1,
+                R_dst_d1=cover_fine.R_dst_d1,
+                edge_feat=cover_fine.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.fine_gluing = SheafGluingCG(
+                src=cover_fine.src,
+                dst=cover_fine.dst,
+                R_src=cover_fine.R_src,
+                R_dst=cover_fine.R_dst,
+                R_src_d1=cover_fine.R_src_d1,
+                R_dst_d1=cover_fine.R_dst_d1,
+                edge_feat=cover_fine.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
     @staticmethod
     def decode(c: torch.Tensor, w: torch.Tensor, phi_q: torch.Tensor) -> torch.Tensor:
@@ -147,6 +198,13 @@ class SGON1DThreeScale(nn.Module):
         edge_hidden: int = 32,
         use_deriv_glue: bool = False,
         deriv_weight: float = 1.0,
+        use_attention_pool: bool = False,
+        use_global_residual: bool = False,
+        glue_mode: str = "cg",
+        poly_k: int = 3,
+        poly_basis: str = "monomial",
+        poly_norm: str = "none",
+        poly_power_iters: int = 10,
         gluing_lam: float = 5.0,
         cg_iters: int = 20,
         cg_tol: float = 1e-6,
@@ -182,23 +240,45 @@ class SGON1DThreeScale(nn.Module):
             hidden=enc_hidden,
             use_global=use_global,
             extra_sensor_dim=0,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
-        self.coarse_gluing = SheafGluingCG(
-            src=cover_coarse.src,
-            dst=cover_coarse.dst,
-            R_src=cover_coarse.R_src,
-            R_dst=cover_coarse.R_dst,
-            R_src_d1=cover_coarse.R_src_d1,
-            R_dst_d1=cover_coarse.R_dst_d1,
-            edge_feat=cover_coarse.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.coarse_gluing = SheafGluingPoly(
+                src=cover_coarse.src,
+                dst=cover_coarse.dst,
+                R_src=cover_coarse.R_src,
+                R_dst=cover_coarse.R_dst,
+                R_src_d1=cover_coarse.R_src_d1,
+                R_dst_d1=cover_coarse.R_dst_d1,
+                edge_feat=cover_coarse.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.coarse_gluing = SheafGluingCG(
+                src=cover_coarse.src,
+                dst=cover_coarse.dst,
+                R_src=cover_coarse.R_src,
+                R_dst=cover_coarse.R_dst,
+                R_src_d1=cover_coarse.R_src_d1,
+                R_dst_d1=cover_coarse.R_dst_d1,
+                edge_feat=cover_coarse.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
         # Mid encoder + gluing (conditioned on coarse)
         self.mid_encoder = PatchEncoder1D(
@@ -210,23 +290,45 @@ class SGON1DThreeScale(nn.Module):
             hidden=enc_hidden,
             use_global=use_global,
             extra_sensor_dim=1,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
-        self.mid_gluing = SheafGluingCG(
-            src=cover_mid.src,
-            dst=cover_mid.dst,
-            R_src=cover_mid.R_src,
-            R_dst=cover_mid.R_dst,
-            R_src_d1=cover_mid.R_src_d1,
-            R_dst_d1=cover_mid.R_dst_d1,
-            edge_feat=cover_mid.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.mid_gluing = SheafGluingPoly(
+                src=cover_mid.src,
+                dst=cover_mid.dst,
+                R_src=cover_mid.R_src,
+                R_dst=cover_mid.R_dst,
+                R_src_d1=cover_mid.R_src_d1,
+                R_dst_d1=cover_mid.R_dst_d1,
+                edge_feat=cover_mid.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.mid_gluing = SheafGluingCG(
+                src=cover_mid.src,
+                dst=cover_mid.dst,
+                R_src=cover_mid.R_src,
+                R_dst=cover_mid.R_dst,
+                R_src_d1=cover_mid.R_src_d1,
+                R_dst_d1=cover_mid.R_dst_d1,
+                edge_feat=cover_mid.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
         # Fine encoder + gluing (conditioned on coarse + mid)
         self.fine_encoder = PatchEncoder1D(
@@ -238,23 +340,45 @@ class SGON1DThreeScale(nn.Module):
             hidden=enc_hidden,
             use_global=use_global,
             extra_sensor_dim=2,
+            use_attention_pool=use_attention_pool,
+            use_global_residual=use_global_residual,
         )
-        self.fine_gluing = SheafGluingCG(
-            src=cover_fine.src,
-            dst=cover_fine.dst,
-            R_src=cover_fine.R_src,
-            R_dst=cover_fine.R_dst,
-            R_src_d1=cover_fine.R_src_d1,
-            R_dst_d1=cover_fine.R_dst_d1,
-            edge_feat=cover_fine.edge_feat,
-            use_edge_weights=use_edge_weights,
-            edge_hidden=edge_hidden,
-            use_deriv=use_deriv_glue,
-            deriv_weight=deriv_weight,
-            lam=gluing_lam,
-            n_iters=cg_iters,
-            tol=cg_tol,
-        )
+        if glue_mode == "poly":
+            self.fine_gluing = SheafGluingPoly(
+                src=cover_fine.src,
+                dst=cover_fine.dst,
+                R_src=cover_fine.R_src,
+                R_dst=cover_fine.R_dst,
+                R_src_d1=cover_fine.R_src_d1,
+                R_dst_d1=cover_fine.R_dst_d1,
+                edge_feat=cover_fine.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                poly_k=poly_k,
+                poly_basis=poly_basis,
+                poly_norm=poly_norm,
+                poly_power_iters=poly_power_iters,
+            )
+        else:
+            self.fine_gluing = SheafGluingCG(
+                src=cover_fine.src,
+                dst=cover_fine.dst,
+                R_src=cover_fine.R_src,
+                R_dst=cover_fine.R_dst,
+                R_src_d1=cover_fine.R_src_d1,
+                R_dst_d1=cover_fine.R_dst_d1,
+                edge_feat=cover_fine.edge_feat,
+                use_edge_weights=use_edge_weights,
+                edge_hidden=edge_hidden,
+                use_deriv=use_deriv_glue,
+                deriv_weight=deriv_weight,
+                lam=gluing_lam,
+                n_iters=cg_iters,
+                tol=cg_tol,
+            )
 
     @staticmethod
     def decode(c: torch.Tensor, w: torch.Tensor, phi_q: torch.Tensor) -> torch.Tensor:
