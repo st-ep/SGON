@@ -3,10 +3,10 @@
 HOW TO RUN (minimal example)
 ----------------------------
 # Default run (N=64, L=1, nu=1e-3, T=1, dt=2e-3, CNAB2, Kolmogorov forcing)
-python generate_dataset.py --output-root ./data --dataset-name ns2d_snapshot
+python Data/ns2d/generate_dataset.py --dataset-name ns2d_snapshot
 
 # Example: make it harder (lower viscosity, longer horizon, higher resolution)
-python generate_dataset.py --output-root ./data --dataset-name ns2d_hard \
+python Data/ns2d/generate_dataset.py --dataset-name ns2d_hard \
   --N 128 --nu 1e-4 --T 2.0 --dt 1e-3 --ic-kmax 16 --ic-rms 7.0 --forcing-amp 0.2
 
 Notes:
@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
 # Allow running via: python Data/ns2d/generate_dataset.py
 if __package__ is None or __package__ == "":
@@ -29,11 +30,19 @@ if __package__ is None or __package__ == "":
 from ns2d.dataset_writer import DatasetBuildConfig, build_and_save_dataset
 
 
+DEFAULT_OUTPUT_ROOT = Path(__file__).resolve().parent
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate 2D Navier–Stokes (vorticity) snapshot-map dataset (ω0 → ωT).")
 
     # Output / dataset
-    p.add_argument("--output-root", type=str, default="Data/", help="Root directory to save datasets.")
+    p.add_argument(
+        "--output-root",
+        type=str,
+        default=str(DEFAULT_OUTPUT_ROOT),
+        help="Root directory to save datasets.",
+    )
     p.add_argument("--dataset-name", type=str, default="ns2d_snapshot", help="Dataset folder name under output-root.")
     p.add_argument("--overwrite", action="store_true", help="Overwrite existing output directory if it exists.")
 
