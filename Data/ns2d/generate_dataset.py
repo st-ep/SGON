@@ -18,6 +18,13 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+
+# Allow running via: python Data/ns2d/generate_dataset.py
+if __package__ is None or __package__ == "":
+    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if data_dir not in sys.path:
+        sys.path.insert(0, data_dir)
 
 from ns2d.dataset_writer import DatasetBuildConfig, build_and_save_dataset
 
@@ -26,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate 2D Navier–Stokes (vorticity) snapshot-map dataset (ω0 → ωT).")
 
     # Output / dataset
-    p.add_argument("--output-root", type=str, default="./data", help="Root directory to save datasets.")
+    p.add_argument("--output-root", type=str, default="Data/", help="Root directory to save datasets.")
     p.add_argument("--dataset-name", type=str, default="ns2d_snapshot", help="Dataset folder name under output-root.")
     p.add_argument("--overwrite", action="store_true", help="Overwrite existing output directory if it exists.")
 

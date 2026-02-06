@@ -357,9 +357,6 @@ def build_and_save_dataset(cfg: DatasetBuildConfig) -> str:
                 max_abs_omegaT=float(diag.max_abs_omegaT),
             )
 
-            if cfg.progress_every > 0 and ((i + 1) % int(cfg.progress_every) == 0 or (i + 1) == len(sample_ids)):
-                print(f"[{split_name}] generated {i+1}/{len(sample_ids)} samples")
-
             yield ex
 
     train_ds = datasets.Dataset.from_generator(
